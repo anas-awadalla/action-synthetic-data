@@ -1,0 +1,11 @@
+# Use standard pynput from PyPI
+pynput
+pyautogui
+obsws-python
+PyQt6
+Pillow
+screeninfo
+wmi
+psutil
+pyinstaller
+PyAutoGUI
