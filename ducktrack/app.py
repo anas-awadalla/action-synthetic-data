@@ -26,11 +26,11 @@ from .util import get_recordings_dir, open_file
 # Define the hotkeys (using pynput format)
 # You might want to make these configurable later
 HOTKEYS = {
-    # '<ctrl>+<alt>+r': 'toggle_record',
-    # '<ctrl>+<alt>+s': 'toggle_record', # Use the same toggle function for stop
+    '<ctrl>+<alt>+r': 'toggle_record',
+    '<ctrl>+<alt>+s': 'toggle_record', # Use the same toggle function for stop
     # '<ctrl>+<alt>+p': 'toggle_pause'
-    '<ctrl>+<alt>+<shift>+<f9>': 'toggle_record',
-    '<ctrl>+<alt>+<shift>+<f10>': 'toggle_pause'
+    # '<ctrl>+<alt>+<shift>+<f9>': 'toggle_record',
+    # '<ctrl>+<alt>+<shift>+<f10>': 'toggle_pause'
 }
 
 class HotkeyListener(threading.Thread, QObject):

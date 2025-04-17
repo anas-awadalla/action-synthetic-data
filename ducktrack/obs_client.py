@@ -100,13 +100,13 @@ class OBSClient:
 
         self.old_profile = self.req_client.get_profile_list().current_profile_name
 
-        if "computer_tracker" not in self.req_client.get_profile_list().profiles:
-            self.req_client.create_profile("computer_tracker")
-        else:
-            self.req_client.set_current_profile("computer_tracker")
-            self.req_client.create_profile("temp")
-            self.req_client.remove_profile("temp")
-            self.req_client.set_current_profile("computer_tracker")
+        # if "computer_tracker" not in self.req_client.get_profile_list().profiles:
+        #     self.req_client.create_profile("computer_tracker")
+        # else:
+        #     self.req_client.set_current_profile("computer_tracker")
+        #     self.req_client.create_profile("temp")
+        #     self.req_client.remove_profile("temp")
+        #     self.req_client.set_current_profile("computer_tracker")
 
         base_width = metadata["screen_width"]
         base_height = metadata["screen_height"]
