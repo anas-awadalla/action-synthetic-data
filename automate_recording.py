@@ -730,6 +730,20 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
     else:
         print(f"Warning: Could not determine initial domain for {initial_url}")
 
+    # --- Activate Browser Window BEFORE Fullscreen ---
+    print("Finding and activating browser window before fullscreen toggle...")
+    browser_window_for_fullscreen = get_browser_window(BROWSER_TYPE)
+    if browser_window_for_fullscreen:
+        try:
+            browser_window_for_fullscreen.activate()
+            print("Browser window activated.")
+            time.sleep(1.0) # Pause to allow focus shift
+        except Exception as activate_err:
+            print(f"Warning: Could not activate browser window before fullscreen: {activate_err}")
+    else:
+        print("Warning: Browser window not found before attempting fullscreen.")
+    # --- End Activation ---
+
     # Use OS-specific fullscreen shortcut
     print("Attempting to toggle fullscreen mode...")
     if sys.platform == 'darwin':  # macOS
@@ -1008,51 +1022,6 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             # Pause after clicking
                             time.sleep(CLICK_PAUSE_AFTER)
                             
-                            # Simulate typing character by character with mistakes
-                            current_typed = ""
-                            
-                            if sys.platform == 'darwin':  # macOS-specific typing handling
-                                # On macOS, use our safe typing function
-                                safe_type_text(random_input_text)
-                                
-                                # Occasionally simulate a backspace for realism
-                                if len(random_input_text) > 5 and random.random() < 0.2:  # 20% chance
-                                    # Press backspace 1-2 times
-                                    num_backspaces = random.randint(1, 2)
-                                    print(f"    (Simulating {num_backspaces} backspace(s))")
-                                    for _ in range(num_backspaces):
-                                        pyautogui.press('backspace')
-                                        time.sleep(random.uniform(0.1, 0.2))
-                            else:
-                                # For non-macOS, use the original typing approach with mistakes
-                                for char in random_input_text:
-                                    # Chance to make a mistake (press backspace)
-                                    if random.random() < 0.05 and len(current_typed) > 0: # e.g., 5% chance if something is typed
-                                        num_backspaces = random.randint(1, min(3, len(current_typed))) # Backspace 1-3 chars
-                                        print(f"    (Simulating {num_backspaces} backspace(s))", end='')
-                                        for _ in range(num_backspaces):
-                                             pyautogui.press('backspace')
-                                             time.sleep(random.uniform(0.05, 0.15))
-                                        current_typed = current_typed[:-num_backspaces] # Update our tracked typed text
-                                    
-                                    # Type the actual character
-                                    pyautogui.write(char, interval=random.uniform(0.04, 0.12))
-                                    current_typed += char
-
-                                    # Chance to press left/right arrow
-                                    if random.random() < 0.03: # e.g. 3% chance per character
-                                        arrow_key = random.choice(['left', 'right'])
-                                        print(f"    (Simulating arrow key: {arrow_key})", end='')
-                                        pyautogui.press(arrow_key)
-                                        time.sleep(random.uniform(0.05, 0.1))
-
-                                    # Small pause sometimes after spaces or punctuation? 
-                                    if char in ' ' + string.punctuation:
-                                         time.sleep(random.uniform(0.0, 0.15))
-
-                            print() # Newline after typing simulation messages
-                            time.sleep(0.5) # Wait after typing finished
-                            
                             # IMPORTANT: On macOS, press ESC key to dismiss any accidentally triggered system UI
                             if sys.platform == 'darwin':
                                 # Press ESC key just to be safe (dismisses emoji picker, dictation prompt, etc.)
@@ -1136,6 +1105,15 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             # Longer wait for focus
                             time.sleep(random.uniform(0.5, 0.8))  # Increased from 0.2-0.4
                             
+                            # --- ADDED TEXT GENERATION FOR TYPE ACTION ---
+                            # Generate text suitable for the platform
+                            if sys.platform == 'darwin':
+                                random_input_text = generate_safe_text_for_mac()
+                            else:
+                                random_input_text = generate_random_text()
+                            print(f"Action: Typing '{random_input_text}' into '{element_text_desc}'...")
+                            # --- END TEXT GENERATION ---
+
                             # Simulate typing character by character with mistakes
                             current_typed = ""
                             
@@ -1187,6 +1165,16 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                                 time.sleep(0.3)
                                 pyautogui.press('escape')
                                 time.sleep(0.3)
+
+                            # --- ADDED TYPED TEXT TO DEBUG SCREENSHOT ---
+                            if debug_mode:
+                                save_debug_screenshot(page, 'type', {
+                                    'target_element': target_element,
+                                    'typed_text': random_input_text  # Pass the generated text
+                                }, dpr=dpr,
+                                    visible_interactive_elements=visible_interactive,
+                                    visible_typing_elements=visible_typing)
+                            # --- END DEBUG SCREENSHOT UPDATE ---
                         else:
                             print(f"Could not get bounding box for the typing element '{element_text_desc}' even after scrolling into view.")
                     except PlaywrightError as pe:
