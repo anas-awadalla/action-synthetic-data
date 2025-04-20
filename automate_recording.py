@@ -14,14 +14,14 @@ import io
 import datetime
 import string
 from random_word import RandomWords
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 SEED_WEBSITES_FILE = 'seed_websites.json'
 MIN_WAIT_SECONDS = 5
 MAX_WAIT_SECONDS = 15
 INTERACTION_TIMEOUT_MS = 10000
-INTERACTION_DELAY_MIN = 1.5
-INTERACTION_DELAY_MAX = 3.0
+INTERACTION_DELAY_MIN = 0.75  # Reduced from 1.5
+INTERACTION_DELAY_MAX = 1.5   # Reduced from 3.0 (minimal delay)
 NUM_INTERACTIONS = 50
 BROWSER_TYPE = 'chromium'
 
@@ -58,12 +58,13 @@ TYPING_SELECTOR = (
 ALL_CHARS = string.ascii_letters + string.digits + string.punctuation + ' ' * 15 # More spaces
 
 # Adjust timing constants for smoother interactions
-INTERACTION_DELAY_MIN = 1.5  # Increased from 0.5
-INTERACTION_DELAY_MAX = 3.0  # Increased from 1.0
-MOUSE_MOVE_DURATION_MIN = 0.8  # New constant for minimum mouse movement duration
-MOUSE_MOVE_DURATION_MAX = 1.5  # New constant for maximum mouse movement duration
-CLICK_PAUSE_BEFORE = 0.3  # Pause before clicking
-CLICK_PAUSE_AFTER = 0.5   # Pause after clicking
+# Set delays to near zero
+INTERACTION_DELAY_MIN = 0.75  # Reduced from 1.5
+INTERACTION_DELAY_MAX = 1.5   # Reduced from 3.0 (minimal delay)
+MOUSE_MOVE_DURATION_MIN = 0.5  # Reduced from 0.8 
+MOUSE_MOVE_DURATION_MAX = 1.0  # Reduced from 1.5 (minimal duration)
+CLICK_PAUSE_BEFORE = 0.2  # Reduced from 0.3
+CLICK_PAUSE_AFTER = 0.3   # Reduced from 0.5
 
 class MacWindow:
     """Helper class to store macOS window info and provide activate method."""
@@ -446,12 +447,12 @@ def generate_safe_text_for_mac(min_words=1, max_words=5, max_len=40):
                 
     return text[:max_len].strip()
 
-def safe_type_text(text, interval_min=0.08, interval_max=0.18):  # Increased intervals
+def safe_type_text(text, interval_min=0.05, interval_max=0.15):  # Minimal intervals -> Increased intervals
     """Types text safely, handling platform-specific issues."""
     if sys.platform == 'darwin':  # macOS
-        # Use a slightly longer interval on macOS to avoid overwhelming the input system
-        interval_min = 0.12  # Increased from 0.06
-        interval_max = 0.25  # Increased from 0.15
+        # Use minimal interval on macOS 
+        interval_min = 0.05 # Increased from 0.0
+        interval_max = 0.15 # Increased from 0.01
         
         # On macOS, type character-by-character with careful handling
         for char in text:
@@ -469,14 +470,14 @@ def safe_type_text(text, interval_min=0.08, interval_max=0.18):  # Increased int
                 # Type regular characters normally
                 pyautogui.write(char, interval=random.uniform(interval_min, interval_max))
                 
-            # Small pause sometimes after spaces or punctuation on macOS - increase pauses
+            # Small pause sometimes after spaces or punctuation on macOS - REMOVED -> Added back moderately
             if char in ' .,:;!?':
-                time.sleep(random.uniform(0.1, 0.3))  # Increased from 0.05-0.2
+                time.sleep(random.uniform(0.1, 0.2))  
     else:
-        # For non-macOS, use the original typing approach with slower intervals
+        # For non-macOS, use the original typing approach with minimal intervals
         for char in text:
             pyautogui.write(char, interval=random.uniform(interval_min, interval_max))
-            # Add occasional small pauses for non-macOS too
+            # Add occasional small pauses for non-macOS too - REMOVED -> Added back moderately
             if char in ' .,:;!?':
                 time.sleep(random.uniform(0.05, 0.15))
 
@@ -567,11 +568,14 @@ def trigger_hotkey(keys):
     """Triggers a keyboard hotkey combination using pyautogui."""
     try:
         # First try to activate the recording app
-        activate_recording_app()
+        activation_success = activate_recording_app()
         
-        print(f"Triggering hotkey via pyautogui: {'+'.join(keys)}")
-        pyautogui.hotkey(*keys)
-        time.sleep(1.5) # Increased delay to ensure app registers it
+        if activation_success:
+            print(f"Triggering hotkey via pyautogui: {'+'.join(keys)}")
+            pyautogui.hotkey(*keys)
+            time.sleep(1.5) # Increased delay to ensure app registers it
+        else:
+            print(f"Skipping hotkey {'+'.join(keys)} because recording app activation failed.")
     except Exception as e:
         print(f"Warning: Could not trigger hotkey {'+'.join(keys)}. Error: {e}")
         print("Check pyautogui permissions/dependencies if this persists (e.g., Accessibility on macOS).")
@@ -720,7 +724,15 @@ def calculate_screen_coordinates(window_pos, logical_pos, dpr, debug=False):
 def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=False):
     """Uses Playwright to find elements, pygetwindow to find the window, and pyautogui to interact."""
     print(f"Page loaded: {page.title()}")
-    time.sleep(random.uniform(2.5, 4.0))  # Increased initial wait time
+    # time.sleep(random.uniform(2.5, 4.0)) # REMOVED initial wait
+
+    # --- Initialize Tracking Sets ---
+    visited_urls = set()
+    interacted_elements = set()
+    current_url = page.url
+    visited_urls.add(current_url)
+    print(f"Initial URL: {current_url}")
+    # --- End Initialization ---
 
     # Get initial domain
     initial_url = page.url
@@ -737,7 +749,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
         try:
             browser_window_for_fullscreen.activate()
             print("Browser window activated.")
-            time.sleep(1.0) # Pause to allow focus shift
+            time.sleep(0.1) # Reduced pause to allow focus shift
         except Exception as activate_err:
             print(f"Warning: Could not activate browser window before fullscreen: {activate_err}")
     else:
@@ -752,7 +764,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
     else:  # Windows/Linux
         print("Using F11 fullscreen shortcut...")
         pyautogui.press('f11')
-    time.sleep(4.5) # Increased wait time for fullscreen transition from 3.5
+    time.sleep(3.0) # Reduced wait time for fullscreen transition from 4.5
 
     screen_width, screen_height = pyautogui.size()
     print(f"Screen dimensions: {screen_width}x{screen_height}")
@@ -768,6 +780,20 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
         print(f"Warning: Could not get devicePixelRatio, assuming 1. Error: {e}")
         dpr = 1
         
+    # Get viewport size AFTER potential fullscreen toggle AND DPR calculation
+    try:
+        viewport_size = page.viewport_size
+        if not viewport_size or viewport_size['width'] <= 0 or viewport_size['height'] <= 0:
+             print("Warning: Could not get valid viewport size, defaulting to estimated logical size.")
+             # Estimate logical size based on screen size and DPR
+             viewport_size = {'width': screen_width / (dpr if dpr > 0 else 1), 'height': screen_height / (dpr if dpr > 0 else 1)}
+        else:
+            print(f"Detected viewport size (logical pixels): {viewport_size['width']}x{viewport_size['height']}")
+    except Exception as e:
+        print(f"Warning: Could not get viewport size, defaulting. Error: {e}")
+        # Estimate logical size based on screen size and DPR
+        viewport_size = {'width': screen_width / (dpr if dpr > 0 else 1), 'height': screen_height / (dpr if dpr > 0 else 1)}
+
     # Additional Mac-specific display info
     if sys.platform == 'darwin':
         macos_scale = get_macos_screen_scaling()
@@ -811,7 +837,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                 if not current_browser_window.isActive:
                     # print("Activating browser window...") # Reduce noise
                     current_browser_window.activate()
-                    time.sleep(0.2)
+                    time.sleep(0.1) # Reduced from 0.2
             except Exception as e:
                 print(f"Warning: Could not activate browser window: {e}")
             window_pos = {'x': current_browser_window.left, 'y': current_browser_window.top}
@@ -828,12 +854,36 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
             print(f"Debug: Found {len(visible_typing)} visible/enabled typing elements.")
             # --- End element finding --- 
 
-            # Decide action: Make click and type roughly equally likely, scroll/move less likely
-            action = random.choices(['scroll', 'click', 'type', 'move'], weights=[15, 35, 35, 15], k=1)[0]
+            # --- Decide action based on AVAILABLE elements ---
+            possible_actions = []
+            action_weights = []
+
+            # Always possible actions
+            possible_actions.extend(['scroll', 'move'])
+            action_weights.extend([15, 15]) # Original weights
+
+            # Add click if possible
+            if visible_interactive:
+                possible_actions.append('click')
+                action_weights.append(35) # Original weight
+            
+            # Add type if possible
+            if visible_typing:
+                possible_actions.append('type')
+                action_weights.append(35) # Original weight
+
+            if not possible_actions: # Should not happen with scroll/move always present, but safety check
+                print("Warning: No possible actions found, defaulting to move.")
+                action = 'move'
+            else:
+                # Choose action from the available options
+                action = random.choices(possible_actions, weights=action_weights, k=1)[0]
+            # --- End action decision ---
+
             print(f"Chosen action: '{action}'")
             
-            # Add a general pause before any action
-            time.sleep(random.uniform(0.5, 1.0))  # New general pause
+            # Add a general pause before any action - REMOVED
+            # time.sleep(random.uniform(0.25, 0.5))  
 
             if action == 'scroll' and window_pos is not None:
                 scroll_amount = random.randint(-800, 800)
@@ -884,17 +934,17 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                     if scroll_amount != 0:
                         print(f"Action: Performing fallback scroll ('down' if scroll_amount > 0 else 'up') by {abs(scroll_amount)} units (smoothly)")
                         # --- Simulate smoother scroll --- 
-                        num_chunks = 8 # Increased from 5 for smoother scrolling
+                        num_chunks = 15 # Increased from 8 for slower scrolling
                         chunk_amount = scroll_amount // num_chunks
                         remainder = scroll_amount % num_chunks
-                        scroll_delay = 0.1 # Increased from 0.04 for slower scrolling
+                        scroll_delay = 0.06 # Increased delay for slower scrolling
 
                         for i in range(num_chunks):
                             if chunk_amount != 0:
                                 pyautogui.scroll(chunk_amount)
                             if i == num_chunks - 1 and remainder != 0: # Add remainder on last chunk
                                 pyautogui.scroll(remainder)
-                            time.sleep(scroll_delay)
+                            time.sleep(scroll_delay) # REMOVED scroll chunk delay -> Added back
                         # --- End smoother scroll --- 
                         fallback_scroll = True
                     else:
@@ -914,8 +964,8 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                         visible_typing_elements=visible_typing)
                 # --- End Scroll Logic ---
                 
-                # Add extra pause after scrolling
-                time.sleep(random.uniform(0.7, 1.5))  # Extra pause after scroll
+                # Add extra pause after scrolling - REMOVED -> Added back
+                time.sleep(random.uniform(0.35, 0.75))  
             
             elif action == 'click' and window_pos is not None:
                 print("Action: Finding CLICKABLE element (non-typing)...")
@@ -973,6 +1023,38 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             logical_center_x = logical_x + logical_w / 2
                             logical_center_y = logical_y + logical_h / 2
 
+                            # --- Check if Element is Occluded --- 
+                            is_occluded = True # Assume occluded initially
+                            try:
+                                topmost_element_handle = page.evaluate_handle(f'document.elementFromPoint({logical_center_x}, {logical_center_y})')
+                                
+                                # Check if the target element is the same as or contains the topmost element at its center
+                                is_same_or_contains = page.evaluate(
+                                    '([target, topmost]) => { return target === topmost || target.contains(topmost) || topmost.contains(target); }', 
+                                    [target_element, topmost_element_handle]
+                                )
+                                
+                                if is_same_or_contains:
+                                    is_occluded = False
+                                    print(f"Debug: Element '{element_text_desc}' center point is not occluded.")
+                                else:
+                                    # Try to get tag name of obscuring element for debugging
+                                    try:
+                                        obscuring_tag = topmost_element_handle.evaluate('el => el.tagName.toLowerCase()')
+                                        print(f"Warning: Element '{element_text_desc}' center point is likely occluded by element: <{obscuring_tag}>")
+                                    except:
+                                        print(f"Warning: Element '{element_text_desc}' center point is likely occluded by an unknown element.")
+                                        
+                            except Exception as occlude_check_err:
+                                print(f"Warning: Could not perform occlusion check for '{element_text_desc}': {occlude_check_err}")
+                                # If check fails, maybe proceed cautiously or skip? Let's skip for now.
+                                is_occluded = True 
+
+                            if is_occluded:
+                                print(f"Skipping click on potentially occluded element: '{element_text_desc}'")
+                                continue # Skip to next interaction
+                            # --- End Occlusion Check ---
+                            
                             # --- Debug Visualization (Moved to helper) --- 
                             if debug_mode:
                                 save_debug_screenshot(page, 'click', {
@@ -1007,7 +1089,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             half_duration = movement_duration / 2
                             pyautogui.moveTo(mid_x, mid_y, duration=half_duration)
                             
-                            # Brief pause at midpoint
+                            # Brief pause at midpoint - REMOVED -> Added back
                             time.sleep(random.uniform(0.05, 0.15))
                             
                             # Second half of the movement (to target)
@@ -1022,12 +1104,36 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             # Pause after clicking
                             time.sleep(CLICK_PAUSE_AFTER)
                             
+                            # --- Record Interaction and URL Change ---
+                            print(f"Recording interaction for element: {element_text_desc}")
+                            interacted_elements.add(element_text_desc)
+
+                            try:
+                                # Check if URL changed after click + pause
+                                new_url = page.url # Get URL after potential navigation
+                                if new_url != current_url:
+                                     # Normalize the new URL before checking/adding
+                                     normalized_new_url = urlparse(new_url)._replace(fragment="").geturl()
+                                     if normalized_new_url not in visited_urls:
+                                         print(f"Navigated to new URL: {normalized_new_url}")
+                                         visited_urls.add(normalized_new_url)
+                                         current_url = normalized_new_url # Update current URL to the normalized one
+                                     else:
+                                         # If the URL changed but normalized is already visited, update current_url anyway
+                                         current_url = normalized_new_url 
+                                else:
+                                     # URL did not change, no update needed for current_url
+                                     pass 
+                            except PlaywrightError as url_check_err:
+                                 print(f"Warning: Could not get page URL after click: {url_check_err}")
+                            # --- End Record Interaction ---
+
                             # IMPORTANT: On macOS, press ESC key to dismiss any accidentally triggered system UI
                             if sys.platform == 'darwin':
                                 # Press ESC key just to be safe (dismisses emoji picker, dictation prompt, etc.)
-                                time.sleep(0.3)
+                                # time.sleep(0.3) # REMOVED -> Added back short pause
                                 pyautogui.press('escape')
-                                time.sleep(0.3)
+                                time.sleep(0.2) 
                         else:
                             print(f"Could not get bounding box for the element '{element_text_desc}' even after scrolling into view.")
                     except PlaywrightError as pe:
@@ -1090,7 +1196,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             half_duration = movement_duration / 2
                             pyautogui.moveTo(mid_x, mid_y, duration=half_duration)
                             
-                            # Brief pause at midpoint
+                            # Brief pause at midpoint - REMOVED -> Added back
                             time.sleep(random.uniform(0.05, 0.15))
                             
                             # Second half of the movement (to target)
@@ -1103,7 +1209,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                             pyautogui.click()
                             
                             # Longer wait for focus
-                            time.sleep(random.uniform(0.5, 0.8))  # Increased from 0.2-0.4
+                            time.sleep(random.uniform(0.3, 0.6))  # Reduced from 0.5-0.8 -> Increased range
                             
                             # --- ADDED TEXT GENERATION FOR TYPE ACTION ---
                             # Generate text suitable for the platform
@@ -1128,7 +1234,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                                     print(f"    (Simulating {num_backspaces} backspace(s))")
                                     for _ in range(num_backspaces):
                                         pyautogui.press('backspace')
-                                        time.sleep(random.uniform(0.1, 0.2))
+                                        # time.sleep(random.uniform(0.1, 0.2)) # REMOVED backspace pause
                             else:
                                 # For non-macOS, use the original typing approach with mistakes
                                 for char in random_input_text:
@@ -1138,7 +1244,7 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                                         print(f"    (Simulating {num_backspaces} backspace(s))", end='')
                                         for _ in range(num_backspaces):
                                              pyautogui.press('backspace')
-                                             time.sleep(random.uniform(0.05, 0.15))
+                                             # time.sleep(random.uniform(0.05, 0.15)) # REMOVED backspace pause
                                         current_typed = current_typed[:-num_backspaces] # Update our tracked typed text
                                     
                                     # Type the actual character
@@ -1150,21 +1256,21 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                                         arrow_key = random.choice(['left', 'right'])
                                         print(f"    (Simulating arrow key: {arrow_key})", end='')
                                         pyautogui.press(arrow_key)
-                                        time.sleep(random.uniform(0.05, 0.1))
+                                        # time.sleep(random.uniform(0.05, 0.1)) # REMOVED arrow key pause
 
-                                    # Small pause sometimes after spaces or punctuation? 
-                                    if char in ' ' + string.punctuation:
-                                         time.sleep(random.uniform(0.0, 0.15))
+                                    # Small pause sometimes after spaces or punctuation? - Handled above by removing loop in safe_type_text
+                                    # if char in ' ' + string.punctuation:
+                                    #      time.sleep(random.uniform(0.0, 0.15))
 
                             print() # Newline after typing simulation messages
-                            time.sleep(0.5) # Wait after typing finished
+                            # time.sleep(random.uniform(0.3, 0.6)) # Added back wait after typing finished
                             
                             # IMPORTANT: On macOS, press ESC key to dismiss any accidentally triggered system UI
                             if sys.platform == 'darwin':
                                 # Press ESC key just to be safe (dismisses emoji picker, dictation prompt, etc.)
-                                time.sleep(0.3)
+                                # time.sleep(0.3) # REMOVED -> Added back short pause
                                 pyautogui.press('escape')
-                                time.sleep(0.3)
+                                time.sleep(0.2) # Added back short pause
 
                             # --- ADDED TYPED TEXT TO DEBUG SCREENSHOT ---
                             if debug_mode:
@@ -1186,23 +1292,38 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                     action = 'move' # Fallback if type chosen but no elements found
 
             if action == 'move':
-                # For macOS, ensure random coordinates avoid the Dock area
-                if sys.platform == 'darwin':
-                    screen_width, screen_height = pyautogui.size()
-                    dock_margin = int(screen_height * 0.1)
-                    rand_x = random.randint(0, screen_width - 1)
-                    rand_y = random.randint(20, screen_height - dock_margin - 1)  # Avoid Dock area and menu bar
-                    print(f"Action: Moving mouse randomly to ({rand_x}, {rand_y}) [Safe macOS area]")
+                # Generate random logical coordinates within the viewport
+                if viewport_size:
+                    logical_rand_x = random.randint(0, int(viewport_size['width']) - 1)
+                    logical_rand_y = random.randint(0, int(viewport_size['height']) - 1)
+                    print(f"Action: Moving mouse randomly within viewport to logical coords ({logical_rand_x}, {logical_rand_y})")
+
+                    # Convert logical viewport coordinates to physical screen coordinates
+                    screen_x, screen_y = calculate_screen_coordinates(
+                        window_pos, 
+                        (logical_rand_x, logical_rand_y), 
+                        dpr,
+                        debug=debug_mode
+                    )
                 else:
-                    rand_x = random.randint(0, screen_width - 1)
-                    rand_y = random.randint(0, screen_height - 1)
-                    print(f"Action: Moving mouse randomly to ({rand_x}, {rand_y})")
-                
+                    # Fallback if viewport size wasn't obtained (should be rare)
+                    print("Warning: Viewport size not available, using screen fallback for move.")
+                    screen_width_fb, screen_height_fb = pyautogui.size()
+                    if sys.platform == 'darwin':
+                        dock_margin = int(screen_height_fb * 0.1)
+                        screen_x = random.randint(0, screen_width_fb - 1)
+                        screen_y = random.randint(20, screen_height_fb - dock_margin - 1)
+                    else:
+                        screen_x = random.randint(0, screen_width_fb - 1)
+                        screen_y = random.randint(0, screen_height_fb - 1)
+                 
                 # Debug screenshot
                 if debug_mode:
                     save_debug_screenshot(page, 'move', {
-                        'screen_x': rand_x, 
-                        'screen_y': rand_y,
+                        'screen_x': screen_x, 
+                        'screen_y': screen_y,
+                        'logical_x': logical_rand_x if viewport_size else None,
+                        'logical_y': logical_rand_y if viewport_size else None,
                         'window_pos': window_pos
                     }, dpr=dpr,
                         visible_interactive_elements=visible_interactive,
@@ -1222,25 +1343,25 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                     # Create points that make a somewhat curved path
                     progress = (p + 1) / (num_points + 1)
                     # Base position by linear interpolation
-                    base_x = current_x + (rand_x - current_x) * progress
-                    base_y = current_y + (rand_y - current_y) * progress
+                    base_x = current_x + (screen_x - current_x) * progress
+                    base_y = current_y + (screen_y - current_y) * progress
                     # Add randomness to create curve
                     curve_x = base_x + random.randint(-50, 50) * (1 - progress)
                     curve_y = base_y + random.randint(-50, 50) * (1 - progress)
                     points.append((curve_x, curve_y))
                 
                 # Add final destination
-                points.append((rand_x, rand_y))
+                points.append((screen_x, screen_y))
                 
                 # Move through points
                 segment_duration = movement_duration / (len(points) - 1)
                 for i in range(1, len(points)):
                     pyautogui.moveTo(points[i][0], points[i][1], duration=segment_duration)
-                    # Small pause at each point
-                    if i < len(points) - 1:
-                        time.sleep(random.uniform(0.05, 0.1))
+                    # Small pause at each point - REMOVED
+                    # if i < len(points) - 1:
+                    #     time.sleep(random.uniform(0.05, 0.1))
 
-            # Increased delay between interactions
+            # Increased delay between interactions - Handled by constants INTERACTION_DELAY_MIN/MAX
             next_delay = random.uniform(INTERACTION_DELAY_MIN, INTERACTION_DELAY_MAX)
             print(f"Waiting {next_delay:.2f} seconds before next interaction...")
             time.sleep(next_delay)
@@ -1254,6 +1375,8 @@ def interact_with_website(page, num_interactions=NUM_INTERACTIONS, debug_mode=Fa
                  print("Fail-safe triggered. Stopping script.")
                  sys.exit(1)
             print("Continuing to next interaction.")
+            # Add a small pause after an error before the next attempt
+            time.sleep(random.uniform(1.0, 2.0))
 
 def save_debug_screenshot(page, action_type, data, dpr=1, screen_size=None, visible_interactive_elements=None, visible_typing_elements=None):
     """Saves a screenshot with visual indicators for debugging purposes."""
@@ -1374,8 +1497,12 @@ def save_debug_screenshot(page, action_type, data, dpr=1, screen_size=None, visi
                  marker_size = 20 # Size of the crosshair
                  marker_color = "purple"
                  text_offset = 5
-                 target_text = f"Move Target\n({screen_x},{screen_y})"
+                 target_text = f"Move Target\nScreen: ({screen_x},{screen_y})"
                  target_on_screen = True
+                 logical_x = data.get('logical_x')
+                 logical_y = data.get('logical_y')
+                 if logical_x is not None and logical_y is not None:
+                     target_text += f"\nLogical: ({logical_x},{logical_y})"
 
                  # Clamp coordinates to draw marker at edge if target is outside screenshot bounds
                  draw_x = viewport_target_x
@@ -1484,7 +1611,7 @@ def main():
                         # --- Trigger Start Recording (AFTER navigation) --- 
                         print("Starting recording...")
                         trigger_hotkey(RECORD_HOTKEY)
-                        time.sleep(3.0)  # Give recording time to start before interaction
+                        time.sleep(1.5)  # Increased recording start wait
                         
                         # --- Check if browser is still the active window ---
                         if sys.platform == 'darwin':  # macOS
@@ -1501,24 +1628,40 @@ def main():
                                 subprocess.run(['osascript', '-e', browser_activate_script], 
                                               capture_output=True, text=True, check=False)
                                 print("Reactivated browser window after starting recording")
-                                time.sleep(1.0)
+                                time.sleep(0.5) # Reduced from 1.0
                             except Exception as e:
                                 print(f"Error reactivating browser: {e}")
                         
                         # --- Now perform interactions ---
                         interact_with_website(page, debug_mode=debug_mode)
 
-                        # --- Pause before stopping recording ---
-                        time.sleep(2.0)  # Ensure interactions are complete
+                        # --- Close browser BEFORE stopping recording ---
+                        if browser:
+                            print("Closing browser before stopping recording...")
+                            try:
+                                browser.close()
+                                browser = None # Ensure it's None so finally block doesn't try again
+                                time.sleep(1.0) # Give browser time to close
+                            except Exception as close_err:
+                                print(f"Warning: Error closing browser before stopping recording: {close_err}")
                         
-                        # --- Trigger Stop Recording (AFTER interactions are done) --- 
+                        # --- Trigger Stop Recording --- 
                         print("Stopping recording...")
                         trigger_hotkey(STOP_HOTKEY)
-                        time.sleep(2.0)  # Give recording time to complete saving
+                        time.sleep(1.0)  # Increased stop recording wait
 
                     except PlaywrightError as pe:
                         print(f"Playwright error during navigation/interaction for {selected_url}: {pe}")
                         # Still attempt to stop recording if an error occurred
+                        # Close browser first if possible
+                        if browser:
+                            print("Closing browser before stopping recording (after error)...")
+                            try:
+                                browser.close()
+                                browser = None
+                                time.sleep(0.5)
+                            except Exception as close_err:
+                                print(f"Warning: Error closing browser before stopping recording (after error): {close_err}")
                         try:
                             trigger_hotkey(STOP_HOTKEY)
                         except Exception as stop_err:
@@ -1527,6 +1670,15 @@ def main():
                         print(f"An unexpected error occurred during interaction for {selected_url}: {e}")
                         traceback.print_exc()
                         # Still attempt to stop recording if an error occurred
+                        # Close browser first if possible
+                        if browser:
+                            print("Closing browser before stopping recording (after error)...")
+                            try:
+                                browser.close()
+                                browser = None
+                                time.sleep(0.5)
+                            except Exception as close_err:
+                                print(f"Warning: Error closing browser before stopping recording (after error): {close_err}")
                         try:
                             trigger_hotkey(STOP_HOTKEY)
                         except Exception as stop_err:
@@ -1546,13 +1698,12 @@ def main():
                 # --- Ensure browser instance for this URL is closed --- 
                 if browser:
                     print("Closing browser instance...")
-                    try:
-                        browser.close()
-                    except Exception as close_err:
-                        print(f"Warning: Error closing browser instance: {close_err}")
+                    # Browser closing is now handled *before* stop recording hotkey
+                    # or wasn't successfully launched. No action needed here.
+                    print("(Browser should already be closed or launch failed)")
                 else:
-                    print("No browser instance was successfully launched for this URL.")
-
+                    print("(No active browser instance from this iteration to close)")
+ 
             # --- Wait before next URL --- 
             wait_time = random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS)
             print(f"Waiting {wait_time:.2f} seconds before launching browser for next URL...")
